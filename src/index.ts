@@ -40,7 +40,7 @@ async function main() {
 
           const isFromMe = Boolean(msg.key.fromMe);
           const senderJid = msg.key.participant || remoteJid;
-          const senderName = msg.pushName || (isFromMe ? 'Protone Bot' : 'Group Member');
+          const senderName = msg.pushName || (isFromMe ? 'tivr Bot' : 'Group Member');
           const messageId = msg.key.id || `${Date.now()}`;
 
           // Extract text content from various WhatsApp message types
@@ -120,7 +120,7 @@ async function main() {
                       id: sentMsg.key.id,
                       chatJid: remoteJid,
                       senderJid: sock.user?.id || 'bot',
-                      senderName: 'Protone Bot',
+                      senderName: 'tivr Bot',
                       role: 'assistant',
                       text: replyText,
                       timestamp: Date.now(),
