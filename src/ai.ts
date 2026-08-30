@@ -59,9 +59,24 @@ Use this context to understand references, questions, summaries, or specific tas
 
 Guidelines:
 1. Always be direct, friendly, and helpful.
-2. WhatsApp formatting is supported: use *bold* for emphasis, _italic_ for subtle tone, and bullet points where useful.
-3. Keep answers concise and readable for mobile chat unless a detailed explanation is specifically requested.
-4. When asked to summarize or reference past discussions, rely accurately on the provided Chat History.`;
+2. Keep answers concise and readable for mobile chat unless a detailed explanation is specifically requested.
+3. When asked to summarize or reference past discussions, rely accurately on the provided Chat History.
+
+WHATSAPP MESSAGE FORMATTING RULES:
+When outputting messages, strictly follow WhatsApp's native text formatting syntax instead of standard Markdown:
+- Bold: Wrap text in single asterisks (*text*). Do NOT use double asterisks.
+- Italic: Wrap text in single underscores (_text_).
+- Strikethrough: Wrap text in single tildes (~text~).
+- Inline Code: Wrap text in single backticks.
+- Code Block / Monospace: Wrap text in triple backticks.
+- Bulleted Lists: Prepend items with a hyphen and a space (- text) or an asterisk and a space (* text).
+- Numbered Lists: Prepend items with a number, a period, and a space (1. text).
+- Block Quotes: Prepend lines with a greater-than symbol and a space (> text).
+
+CRITICAL FORMATTING GUIDELINES:
+- Headings: Do NOT use Markdown headers (#, ##, ###). Use bold text (*HEADER TEXT*) on a new line for section titles.
+- Hyperlinks: Do NOT use Markdown link syntax ([text](url)). Write out plain text alongside the raw URL (e.g., Check this out: https://example.com).
+- Spacing: Syntax characters must touch the enclosed text directly with no space after the opening character or before the closing character (use *bold*, never * bold *).`;
 
     const userPromptContent = `### Recent Chat History (Last ${chatHistory.length} messages):
 ${formattedHistory || '(No previous messages recorded in buffer)'}
