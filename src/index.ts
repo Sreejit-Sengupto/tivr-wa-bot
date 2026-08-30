@@ -11,8 +11,10 @@ async function main() {
   console.log(`Auth Directory:   ${config.authDir}`);
   console.log(`Log Level:        ${config.logLevel}`);
   console.log(`Trigger Tag:      ${config.triggerTag}`);
+  console.log(`AI Engine:        LangChain (ChatGroq)`);
   console.log(`Groq Model:       ${config.groqModel}`);
   console.log(`Groq RPM Limit:   ${config.groqRpmLimit} req/min`);
+  console.log(`Tavily Search:    ${config.tavilyApiKey ? 'Enabled (Web Search Active)' : 'Disabled (TAVILY_API_KEY not set)'}`);
   console.log(`Drip Rate:        1 outbound message per 4s`);
   if (config.targetGroupJid) {
     console.log(`Target Group JID: ${config.targetGroupJid}`);
@@ -97,7 +99,7 @@ async function main() {
             // Generate AI response with Groq asynchronously
             (async () => {
               try {
-                console.log(`[Bot] Calling Groq (${config.groqModel}) with ${chatHistory.length} messages of context...`);
+                console.log(`[Bot] Invoking LangChain agent (${config.groqModel}) with ${chatHistory.length} context messages...`);
                 const replyText = await generateAIResponse({
                   promptQuery,
                   senderName,
