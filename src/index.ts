@@ -40,7 +40,6 @@ async function main() {
 
           const isFromMe = Boolean(msg.key.fromMe);
           const senderJid = msg.key.participant || remoteJid;
-          const senderName = msg.pushName || (isFromMe ? 'tivr Bot' : 'Group Member');
           const messageId = msg.key.id || `${Date.now()}`;
 
           // Extract text content from various WhatsApp message types
@@ -53,6 +52,17 @@ async function main() {
 
           if (!text.trim()) continue;
 
+          const triggerLower = config.triggerTag.toLowerCase();
+          const textLower = text.toLowerCase();
+          const containsTrigger = textLower.includes(triggerLower);
+
+          // Determine whether this message is a user prompt vs an AI reply echo
+          const isUserPrompt = containsTrigger || !isFromMe;
+          const senderName = isUserPrompt
+            ? (msg.pushName || (isFromMe ? 'You' : 'Group Member'))
+            : 'tivr Bot';
+          const role = isUserPrompt ? 'user' : 'assistant';
+
           const timestamp =
             typeof msg.messageTimestamp === 'number'
               ? msg.messageTimestamp * 1000
@@ -64,7 +74,7 @@ async function main() {
             chatJid: remoteJid,
             senderJid,
             senderName,
-            role: isFromMe ? 'assistant' : 'user',
+            role,
             text: text.trim(),
             timestamp,
           });
@@ -79,11 +89,7 @@ async function main() {
           console.log(`Buffer Count: ${currentCount}/20 stored messages`);
           console.log('--------------------------------------------------');
 
-          // Trigger check for messages containing the trigger tag
-          const triggerLower = config.triggerTag.toLowerCase();
-          const textLower = text.toLowerCase();
-
-          if (textLower.includes(triggerLower)) {
+          if (containsTrigger) {
             // Extract the query without the trigger tag
             const promptQuery = text.replace(new RegExp(config.triggerTag, 'ig'), '').trim();
 

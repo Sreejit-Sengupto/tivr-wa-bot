@@ -1,10 +1,10 @@
 import { ChatGroq } from '@langchain/groq';
 import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts';
-import { AIMessage, HumanMessage, type BaseMessage } from '@langchain/core/messages';
-import { StringOutputParser } from '@langchain/core/output_parsers';
+import { AIMessage, HumanMessage, ToolMessage, SystemMessage, type BaseMessage } from '@langchain/core/messages';
 import { config } from './config.js';
 import { type StoredMessage } from './store.js';
 import { aiRateLimiter } from './rateLimiter.js';
+import { botTools } from './tools/index.js';
 
 let modelInstance: ChatGroq | null = null;
 
@@ -25,22 +25,50 @@ function getChatModel(): ChatGroq {
 }
 
 /**
- * Formats stored WhatsApp buffer messages into standard LangChain BaseMessage objects.
+ * Formats stored WhatsApp messages into standard LangChain BaseMessage objects.
  */
-function formatChatHistoryToLangChainMessages(chatHistory: StoredMessage[]): BaseMessage[] {
+function formatChatHistory(chatHistory: StoredMessage[]): BaseMessage[] {
   return chatHistory.map((msg) => {
-    const time = new Date(msg.timestamp).toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-    const roleLabel = msg.role === 'assistant' ? 'Protone (Bot)' : msg.senderName;
-    const formattedText = `[${time}] ${roleLabel}: ${msg.text}`;
-
     if (msg.role === 'assistant') {
-      return new AIMessage({ content: formattedText });
+      return new AIMessage({ content: msg.text });
     }
-    return new HumanMessage({ content: formattedText });
+    return new HumanMessage({ content: `${msg.senderName}: ${msg.text}` });
   });
+}
+
+/**
+ * Synthesizes a clean text response when tool execution completes or produces empty text.
+ */
+async function synthesizeFinalResponse(messages: BaseMessage[], chatModel: ChatGroq): Promise<AIMessage> {
+  const currentDateStr = new Date().toISOString().split('T')[0];
+  const sanitized: BaseMessage[] = [
+    new SystemMessage(
+      `You are tivr, a smart and helpful AI assistant inside a WhatsApp group chat.\nCurrent real-world date: ${currentDateStr}.\nIMPORTANT DIRECTIVE: Respond in plain text only. Do NOT output any JSON, function call, or tool call under any circumstances.`
+    ),
+  ];
+  const toolOutputs: string[] = [];
+
+  for (const msg of messages) {
+    if (msg instanceof ToolMessage) {
+      if (typeof msg.content === 'string' && msg.content.trim()) {
+        toolOutputs.push(msg.content.trim());
+      }
+    } else if (msg instanceof AIMessage && msg.tool_calls && msg.tool_calls.length > 0) {
+      continue;
+    } else if (msg instanceof SystemMessage) {
+      continue;
+    } else {
+      sanitized.push(msg);
+    }
+  }
+
+  const contextInfo =
+    toolOutputs.length > 0
+      ? `Retrieved Information:\n${toolOutputs.join('\n\n')}\n\nBased on the above information (and your general knowledge), provide a direct, concise answer to the user prompt.`
+      : 'Please provide a direct and concise answer to the user question.';
+
+  sanitized.push(new HumanMessage(contextInfo));
+  return chatModel.invoke(sanitized);
 }
 
 export interface GenerateResponseParams {
@@ -50,8 +78,7 @@ export interface GenerateResponseParams {
 }
 
 /**
- * Generates an AI response using LangChain ChatGroq with conversation context from recent messages,
- * respecting Groq RPM rate limits via a sliding-window rate limiter.
+ * Generates an AI response using LangChain ChatGroq with weather and internet search tools.
  */
 export async function generateAIResponse({
   promptQuery,
@@ -59,61 +86,105 @@ export async function generateAIResponse({
   chatHistory,
 }: GenerateResponseParams): Promise<string> {
   if (!config.groqApiKey && !process.env.GROQ_API_KEY) {
-    return '⚠️ [tivr AI] GROQ_API_KEY is not configured in your .env file. Please set GROQ_API_KEY to enable AI replies.';
+    return '⚠️ GROQ_API_KEY is missing. Please set it in your .env file.';
   }
 
   try {
-    // Acquire rate limit slot (delays if RPM limit is reached in the rolling 60s window)
     await aiRateLimiter.acquire();
 
     const chatModel = getChatModel();
-    const langchainMessages = formatChatHistoryToLangChainMessages(chatHistory);
+    const modelWithTools = chatModel.bindTools(botTools);
+    const historyMessages = formatChatHistory(chatHistory);
 
-    const currentRpm = aiRateLimiter.getCurrentRpm();
     console.log(
-      `[LangChain AI] Dispatching chain request with model "${config.groqModel}" (Current window load: ${currentRpm}/${config.groqRpmLimit} RPM)...`
+      `[LangChain AI] Dispatching request with model "${config.groqModel}" and ${botTools.length} tools...`
     );
+
+    const currentDateStr = new Date().toISOString().split('T')[0];
+    const currentYear = new Date().getFullYear();
 
     const promptTemplate = ChatPromptTemplate.fromMessages([
       [
         'system',
         `You are tivr, a smart, helpful, and concise AI assistant inside a WhatsApp group chat.
-        You have access to the recent conversation history of the group (up to the past 20 messages).
-        Use this context to understand references, questions, summaries, or specific tasks requested by the group members.
+Current real-world date: ${currentDateStr} (Year: ${currentYear}).
+When the user asks about recent events, latest scores, recent matches/ducks, or current news, assume the present time is ${currentYear}. Formulate search queries naturally for up-to-date information
+You have access to recent group messages for context.
 
-        Guidelines:
-        1. Always be direct, friendly, and helpful.
-        2. WhatsApp formatting is supported: use *bold* for emphasis, _italic_ for subtle tone, and bullet points where useful.
-        3. Keep answers concise and readable for mobile chat unless a detailed explanation is specifically requested.
-        4. When asked to summarize or reference past discussions, rely accurately on the provided Chat History.`,
+Tools:
+- get_weather: Fetch live weather data for a city or location.
+- search_internet: Search the web for cricket scores, sports updates, news, or general facts.
+Call available tools automatically whenever live or external real-time data is needed.
+
+Formatting & Style:
+- Be direct, friendly, and concise for mobile chat.
+- WhatsApp formatting allowed: *bold*, _italic_, bullet points.`,
       ],
       new MessagesPlaceholder('chat_history'),
-      ['human', 'From: {senderName}\nPrompt / Question: {promptQuery}'],
+      ['human', 'From: {senderName}\nQuestion: {promptQuery}'],
     ]);
-
-    const outputParser = new StringOutputParser();
-    const chain = promptTemplate.pipe(chatModel).pipe(outputParser);
 
     const effectiveQuery =
       promptQuery ||
-      '(The user tagged @tivr with no extra text. Greet the group politely or ask how you can help.)';
+      '(The user tagged @tivr with no extra text. Greet the group politely.)';
 
-    const reply = await chain.invoke({
-      chat_history: langchainMessages,
+    const formattedMessages = await promptTemplate.formatMessages({
+      chat_history: historyMessages,
       senderName,
       promptQuery: effectiveQuery,
     });
 
-    const trimmedReply = reply?.trim();
-    if (!trimmedReply) {
-      return 'Sorry, I could not generate a response. Please try again.';
+    const messages: BaseMessage[] = [...formattedMessages];
+    let response = await modelWithTools.invoke(messages);
+
+    const maxIterations = 3;
+    let iteration = 0;
+
+    while (response.tool_calls && response.tool_calls.length > 0 && iteration < maxIterations) {
+      iteration++;
+      messages.push(response);
+
+      for (const toolCall of response.tool_calls) {
+        console.log(`[LangChain AI] Executing tool "${toolCall.name}" with args:`, toolCall.args);
+        const targetTool = botTools.find((t) => t.name === toolCall.name);
+
+        let toolOutput = '';
+        if (targetTool) {
+          try {
+            const result = await (targetTool as any).invoke(toolCall.args || {});
+            toolOutput = typeof result === 'string' ? result : JSON.stringify(result);
+          } catch (err: any) {
+            console.error(`[LangChain AI] Tool execution error for "${toolCall.name}":`, err);
+            toolOutput = `Error executing tool ${toolCall.name}: ${err?.message || 'Unknown error'}`;
+          }
+        } else {
+          toolOutput = `Tool ${toolCall.name} not found`;
+        }
+
+        messages.push(
+          new ToolMessage({
+            content: toolOutput,
+            tool_call_id: toolCall.id || toolCall.name,
+          })
+        );
+      }
+
+      response = await modelWithTools.invoke(messages);
     }
 
-    return trimmedReply;
+    let reply = typeof response.content === 'string' ? response.content.trim() : '';
+
+    if (!reply || (response.tool_calls && response.tool_calls.length > 0)) {
+      console.log('[LangChain AI] Synthesizing final text response...');
+      const finalRes = await synthesizeFinalResponse(messages, chatModel);
+      reply = typeof finalRes.content === 'string' ? finalRes.content.trim() : '';
+    }
+
+    return reply || 'Sorry, I could not generate a response. Please try again.';
   } catch (error: any) {
     console.error('[LangChain AI] Error generating response:', error);
     if (error?.status === 429 || error?.message?.includes('429')) {
-      return '⚠️ [tivr AI] Rate limit reached on Groq API. Please wait a moment before trying again.';
+      return '⚠️ Rate limit reached on Groq API. Please wait a moment before trying again.';
     }
     return `⚠️ Error generating AI response: ${error?.message || 'Unknown error'}`;
   }
