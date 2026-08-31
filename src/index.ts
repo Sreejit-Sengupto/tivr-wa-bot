@@ -85,7 +85,35 @@ async function main() {
 
                     if (textLower.startsWith(triggerLower)) {
                         // Extract the query without the trigger tag
-                        const promptQuery = text.replace(new RegExp(config.triggerTag, 'ig'), '').trim();
+                        let promptQuery = text.replace(new RegExp(config.triggerTag, 'ig'), '').trim();
+
+                        // If the user replied to a message with just the tag (empty prompt),
+                        // use the quoted/replied-to message text as the prompt instead.
+                        // contextInfo lives on the sub-message type (e.g. extendedTextMessage,
+                        // imageMessage, videoMessage, etc.) — NOT on `conversation` (plain string).
+                        if (!promptQuery) {
+                            const msgContent = msg.message;
+                            const contextInfo =
+                                msgContent?.extendedTextMessage?.contextInfo ??
+                                msgContent?.imageMessage?.contextInfo ??
+                                msgContent?.videoMessage?.contextInfo ??
+                                msgContent?.audioMessage?.contextInfo ??
+                                msgContent?.stickerMessage?.contextInfo ??
+                                null;
+
+                            const quotedMsg = contextInfo?.quotedMessage;
+                            const quotedText =
+                                quotedMsg?.conversation ||
+                                quotedMsg?.extendedTextMessage?.text ||
+                                quotedMsg?.imageMessage?.caption ||
+                                quotedMsg?.videoMessage?.caption ||
+                                '';
+                            if (quotedText.trim()) {
+                                const quotedParticipant = contextInfo?.participant || 'Someone';
+                                promptQuery = `(Replying to message from ${quotedParticipant}): ${quotedText.trim()}`;
+                                console.log(`[Bot] Empty prompt — using quoted message text as prompt: "${promptQuery}"`);
+                            }
+                        }
 
                         console.log(`\n[Bot] Trigger detected! Tag: "${config.triggerTag}" (${isFromMe ? 'from Self/Outbound' : 'from Member/Inbound'})`);
                         console.log(`[Bot] Extracted Prompt: "${promptQuery}"`);
