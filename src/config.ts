@@ -8,6 +8,8 @@ export const config = {
   targetGroupJid: process.env.TARGET_GROUP_JID || '',
   triggerTag: process.env.TRIGGER_TAG || '@protone',
   groqApiKey: process.env.GROQ_API_KEY || '',
-  groqModel: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
+  groqModel: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
   groqRpmLimit: Number(process.env.GROQ_RPM_LIMIT) || 25,
+  tavilyApiKey: process.env.TAVILY_API_KEY || '',
 };
+
