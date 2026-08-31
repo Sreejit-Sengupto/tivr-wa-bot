@@ -112,7 +112,7 @@ export const calculator = tool(
 function buildTavilyTool(tavilyApiKey: string): any {
   const rawSearch = new TavilySearch({
     tavilyApiKey,
-    maxResults: 2,
+    maxResults: 1,
   });
 
   return tool(
@@ -162,7 +162,7 @@ function buildTavilyTool(tavilyApiKey: string): any {
       const results: any[] = Array.isArray(parsed?.results) ? parsed.results : [];
       results.forEach((r: any, i: number) => {
         const title = r?.title ? `[${r.title}]` : `[Result ${i + 1}]`;
-        const snippet = trimContent(r?.content || r?.snippet || '', 800);
+        const snippet = trimContent(r?.content || r?.snippet || '', 400);
         const url = r?.url ? ` (${r.url})` : '';
         if (snippet) parts.push(`${title}${url}: ${snippet}`);
       });
