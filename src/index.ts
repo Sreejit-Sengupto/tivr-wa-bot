@@ -26,7 +26,11 @@ async function main() {
         onOpen: async (sock) => {
             console.log(`\n[Bot] WhatsApp client logged in as: ${sock.user?.id || 'Connected Device'}`);
             console.log(`[Bot] Watching for messages in target group: ${config.targetGroupJid || 'ALL'}`);
+            console.log(`[Bot] Presence: Marking Presence as "Unavailable"`);
             console.log(`[Bot] Trigger keyword: "${config.triggerTag}"\n`);
+
+            // Set presence to unavailable
+            await sock.sendPresenceUpdate('unavailable')
 
             // Listen for incoming and outgoing messages
             sock.ev.on('messages.upsert', async ({ messages, type }) => {
