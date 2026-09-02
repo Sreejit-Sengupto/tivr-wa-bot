@@ -114,6 +114,6 @@ export async function connectToWhatsApp(
     }
   });
 
-  await sock.sendPresenceUpdate('unavailable')
+  // await sock.sendPresenceUpdate('unavailable')
   return sock;
 }
