@@ -16,17 +16,17 @@ async function main() {
     console.log(`Groq Model:       ${config.groqModel}`);
     console.log(`Groq RPM Limit:   ${config.groqRpmLimit} req/min`);
     console.log(`Drip Rate:        1 outbound message per 4s`);
-    if (config.targetGroupJid) {
-        console.log(`Target Group JID: ${config.targetGroupJid}`);
+    if (config.targetJIDS.length > 0) {
+        console.log(`Target Group JIDs: ${config.targetJIDS.join(', ')}`);
     } else {
-        console.log(`Target Group JID: (Monitoring all messages)`);
+        console.log(`Target Group JIDs: (Monitoring all messages)`);
     }
     console.log('==================================================\n');
 
     await connectToWhatsApp({
         onOpen: async (sock) => {
             console.log(`\n[Bot] WhatsApp client logged in as: ${sock.user?.id || 'Connected Device'}`);
-            console.log(`[Bot] Watching for messages in target group: ${config.targetGroupJid || 'ALL'}`);
+            console.log(`[Bot] Watching for messages in target group: ${config.targetJIDS.join(', ') || 'ALL'}`);
             console.log(`[Bot] Presence: Marking Presence as "Unavailable"`);
             console.log(`[Bot] Trigger keyword: "${config.triggerTag}"\n`);
 
@@ -40,7 +40,11 @@ async function main() {
                     if (!remoteJid) continue;
 
                     // If a TARGET_GROUP_JID is set, filter out any messages from other chats
-                    if (config.targetGroupJid && remoteJid !== config.targetGroupJid) {
+                    // if (config.targetGroupJid && remoteJid !== config.targetGroupJid) {
+                    //     continue;
+                    // }
+
+                    if (config.targetJIDS && !config.targetJIDS.includes(remoteJid)) {
                         continue;
                     }
 
