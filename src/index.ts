@@ -4,6 +4,7 @@ import { messageStore } from './store.js';
 import { outboundQueue } from './queue.js';
 import { generateAIResponse } from './ai.js';
 import { setTimeout as delay } from 'node:timers/promises';
+import process from 'node:process'
 
 async function main() {
     console.log('==================================================');
@@ -87,6 +88,9 @@ async function main() {
                     console.log(`Attachments:    "${attachments}"`);
                     console.log(`Buffer Count: ${currentCount}/20 stored messages`);
                     console.log('--------------------------------------------------');
+                    if (!isFromMe) {
+                        process.stdout.write('\x07');
+                    }
 
                     // Trigger check for messages containing the trigger tag
                     const triggerLower = config.triggerTag.toLowerCase();
