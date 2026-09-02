@@ -3,6 +3,7 @@ import { config } from './config.js';
 import { messageStore } from './store.js';
 import { outboundQueue } from './queue.js';
 import { generateAIResponse } from './ai.js';
+import { setTimeout as delay } from 'node:timers/promises';
 
 async function main() {
     console.log('==================================================');
@@ -58,6 +59,9 @@ async function main() {
                             ? msg.messageTimestamp * 1000
                             : Date.now();
 
+                    // attachments
+                    const attachments = msg.message?.imageMessage?.url || ''
+
                     // Add message to in-memory store
                     messageStore.add({
                         id: messageId,
@@ -76,6 +80,7 @@ async function main() {
                     console.log(`Chat JID:     ${remoteJid}`);
                     console.log(`Sender:       ${senderName} (${senderJid})`);
                     console.log(`Text:         "${text}"`);
+                    console.log(`Attachments:    "${attachments}"`);
                     console.log(`Buffer Count: ${currentCount}/20 stored messages`);
                     console.log('--------------------------------------------------');
 
@@ -137,6 +142,8 @@ async function main() {
                                 // Enqueue response to Drip Queue (1 msg / 4s)
                                 await outboundQueue.enqueue(async () => {
                                     console.log(`[Bot] Dispatched outbound AI message to ${remoteJid}...`);
+                                    await sock.sendPresenceUpdate('composing', remoteJid);
+                                    await delay(2000);
                                     return sock.sendMessage(
                                         remoteJid,
                                         { text: replyText },

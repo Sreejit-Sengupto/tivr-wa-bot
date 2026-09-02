@@ -59,6 +59,7 @@ export async function connectToWhatsApp(
     syncFullHistory: false,
     generateHighQualityLinkPreview: true,
   });
+  await sock.sendPresenceUpdate('unavailable')
 
   // Save updated session credentials whenever they change
   sock.ev.on('creds.update', saveCreds);
