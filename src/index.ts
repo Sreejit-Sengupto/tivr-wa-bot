@@ -29,11 +29,11 @@ async function main() {
             console.log(`[Bot] Presence: Marking Presence as "Unavailable"`);
             console.log(`[Bot] Trigger keyword: "${config.triggerTag}"\n`);
 
-            // Set presence to unavailable
-            await sock.sendPresenceUpdate('unavailable')
 
             // Listen for incoming and outgoing messages
             sock.ev.on('messages.upsert', async ({ messages, type }) => {
+                // Set presence to unavailable
+                await sock.sendPresenceUpdate('unavailable');
                 for (const msg of messages) {
                     const remoteJid = msg.key.remoteJid;
                     if (!remoteJid) continue;
