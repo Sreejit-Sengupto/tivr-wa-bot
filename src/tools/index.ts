@@ -181,7 +181,7 @@ function buildTavilyTool(tavilyApiKey: string): any {
     {
       name: 'web_search',
       description:
-        'Search the internet for real-time information, recent news, sports scores, stock prices, weather, or any topic that requires up-to-date knowledge. Use only when the answer cannot be derived from context or chat history.',
+        'Search the internet for real-time information, recent news, sports scores, stock prices, weather, or any topic that requires up-to-date knowledge. Use only when the answer cannot be derived from context or chat history. Use the get_current_date_time tool before calling this tool.',
       schema: z.object({
         query: z.string().describe('A concise, specific search query (e.g., "India vs Australia cricket score today")'),
       }),
