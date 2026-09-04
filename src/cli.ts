@@ -20,6 +20,7 @@ async function runCli() {
       promptQuery: argsQuery,
       senderName: 'TerminalUser',
       chatHistory: [],
+      isAudio: false
     });
     console.log('\nProtone > ' + reply + '\n');
     process.exit(0);
@@ -60,6 +61,7 @@ async function runCli() {
         promptQuery: input,
         senderName: 'TerminalUser',
         chatHistory: [],
+        isAudio: false
       });
 
       console.log('\nProtone > ' + response + '\n');
