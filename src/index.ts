@@ -2,9 +2,11 @@ import { connectToWhatsApp } from './connection.js';
 import { config } from './config.js';
 import { messageStore } from './store.js';
 import { outboundQueue } from './queue.js';
-import { generateAIResponse } from './ai.js';
+import { generateAIResponse, generateTTS } from './ai.js';
 import { setTimeout as delay } from 'node:timers/promises';
 import process from 'node:process'
+import { deleteAudioFile } from './ffmpeg.js';
+import { saveAudioUsagePerDay } from './utils.js';
 
 async function main() {
     console.log('==================================================');
@@ -104,6 +106,8 @@ async function main() {
                         // Extract the query without the trigger tag
                         let promptQuery = text.replace(new RegExp(config.triggerTag, 'ig'), '').trim();
 
+                        const isAudio = promptQuery.includes('audio') || promptQuery.includes('sing') || promptQuery.includes('gana') || promptQuery.includes('ga') || promptQuery.includes('sunao')
+
                         // If the user replied to a message with just the tag (empty prompt),
                         // use the quoted/replied-to message text as the prompt instead.
                         // contextInfo lives on the sub-message type (e.g. extendedTextMessage,
@@ -147,21 +151,42 @@ async function main() {
                                     promptQuery,
                                     senderName,
                                     chatHistory,
+                                    isAudio
                                 });
+
+                                let audioRes: {
+                                    allowed: boolean;
+                                    message: string;
+                                    filePath?: string | undefined;
+                                } | undefined = undefined;
+
+                                if (isAudio) {
+                                    console.log(`[Bot] Audio request detected! Generating TTS...`);
+                                    audioRes = await generateTTS(replyText);
+                                }
 
                                 console.log(`[Bot] Generated AI Response (${replyText.length} chars). Enqueueing to drip queue...`);
 
                                 // Enqueue response to Drip Queue (1 msg / 4s)
                                 await outboundQueue.enqueue(async () => {
                                     console.log(`[Bot] Dispatched outbound AI message to ${remoteJid}...`);
-                                    await sock.sendPresenceUpdate('composing', remoteJid);
-                                    await delay(2000);
-                                    return sock.sendMessage(
-                                        remoteJid,
-                                        { text: replyText },
-                                        { quoted: msg }
-                                    );
-                                }).then((sentMsg) => {
+                                    if (isAudio) {
+                                        if (audioRes?.allowed && audioRes.filePath) {
+                                            // await sock.sendPresenceUpdate('recording', remoteJid);
+                                            // await delay(2000);
+                                            return sock.sendMessage(remoteJid, {
+                                                audio: { url: audioRes?.filePath },
+                                                mimetype: 'audio/ogg; codecs=opus',
+                                            }, { quoted: msg });
+                                        } else {
+                                            // await sock.sendPresenceUpdate('composing', remoteJid);
+                                            return sock.sendMessage(remoteJid, { text: audioRes?.message || 'Limit reached' }, { quoted: msg });
+                                        }
+                                    }
+                                    // await sock.sendPresenceUpdate('composing', remoteJid);
+                                    // await delay(2000);
+                                    return sock.sendMessage(remoteJid, { text: replyText }, { quoted: msg });
+                                }).then(async (sentMsg) => {
                                     if (sentMsg?.key.id) {
                                         messageStore.add({
                                             id: sentMsg.key.id,
@@ -172,6 +197,10 @@ async function main() {
                                             text: replyText,
                                             timestamp: Date.now(),
                                         });
+                                    }
+                                    if (audioRes?.filePath) {
+                                        await deleteAudioFile(audioRes.filePath)
+                                        await saveAudioUsagePerDay()
                                     }
                                     console.log('[Bot] AI Reply successfully sent to WhatsApp!');
                                 });

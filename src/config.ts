@@ -12,5 +12,7 @@ export const config = {
   groqModel: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
   groqRpmLimit: Number(process.env.GROQ_RPM_LIMIT) || 25,
   tavilyApiKey: process.env.TAVILY_API_KEY || '',
+  elevenLabsKey: process.env.ELEVEN_LABS_KEY || '',
+  upiId: process.env.UPI_ID || ''
 };
 
