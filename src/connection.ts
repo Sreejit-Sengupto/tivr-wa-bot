@@ -11,6 +11,7 @@ import qrcode from 'qrcode-terminal';
 import pino from 'pino';
 import fs from 'node:fs';
 import { config } from './config.js';
+import schedule from 'node-schedule';
 
 export interface ConnectionCallbacks {
   onOpen?: (sock: WASocket) => Promise<void> | void;
@@ -60,6 +61,8 @@ export async function connectToWhatsApp(
     generateHighQualityLinkPreview: true,
   });
 
+  let isMessageScheduled = false
+
   // Save updated session credentials whenever they change
   sock.ev.on('creds.update', saveCreds);
 
@@ -81,6 +84,28 @@ export async function connectToWhatsApp(
       callbacks?.onConnecting?.();
     } else if (connection === 'open') {
       console.log('[WhatsApp] Connection established successfully! Socket is ready.');
+
+      const targetDate = new Date('2026-09-05T20:43:00+05:30');
+      // Guard 1: Only schedule if it's still in the future
+      // Guard 2: Only schedule if we haven't already scheduled it on a previous socket reconnect
+      if (targetDate.getTime() > Date.now() && !isMessageScheduled) {
+        isMessageScheduled = true;
+
+        schedule.scheduleJob(targetDate, async () => {
+          try {
+            await sock.sendMessage(config.targetJIDS[1], {
+              text: config.birthdayWish
+            });
+            console.log('[WhatsApp] ✅ Sent birthday message via node-schedule!');
+          } catch (err) {
+            console.error('[WhatsApp] ❌ Send error:', err);
+          }
+        });
+
+        console.log(`[WhatsApp] ⏰ Scheduled birthday message for ${targetDate.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`);
+      } else if (isMessageScheduled) {
+        console.log('[WhatsApp] ℹ️ Message is already scheduled from a prior connection.');
+      }
       callbacks?.onOpen?.(sock);
     } else if (connection === 'close') {
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
