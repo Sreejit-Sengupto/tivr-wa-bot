@@ -14,6 +14,7 @@ export const config = {
   tavilyApiKey: process.env.TAVILY_API_KEY || '',
   elevenLabsKey: process.env.ELEVEN_LABS_KEY || '',
   upiId: process.env.UPI_ID || '',
-  birthdayWish: process.env.BIRTHDAY_WISH || ''
+  birthdayWish: process.env.BIRTHDAY_WISH || '',
+  mention: process.env.MENTION || ''
 };
 
