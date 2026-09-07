@@ -10,8 +10,7 @@ interface SearchSnippet {
 }
 
 /**
- * Performs concurrent search across Tavily, Wikipedia, and DuckDuckGo,
- * returning a rich, consolidated multi-source search output.
+ * Performs web search using Tavily API.
  */
 async function performMultiSourceSearch(query: string): Promise<string> {
   const snippets: SearchSnippet[] = [];
@@ -50,7 +49,7 @@ async function performMultiSourceSearch(query: string): Promise<string> {
                 tavilyCount++;
               }
             }
-            console.log(`[Tavily Search]  Successfully fetched ${tavilyCount} snippet(s)`);
+            console.log(`[Tavily Search] Successfully fetched ${tavilyCount} snippet(s)`);
           } else {
             console.log(`[Tavily Search] Response received but no result items found.`);
           }
@@ -62,7 +61,8 @@ async function performMultiSourceSearch(query: string): Promise<string> {
     );
   }
 
-  // 2. Wikipedia Search API + REST Page Summary
+  /*
+  // 2. Wikipedia Search API + REST Page Summary (COMMENTED OUT)
   tasks.push(
     (async () => {
       try {
@@ -79,7 +79,6 @@ async function performMultiSourceSearch(query: string): Promise<string> {
           const items = wikiData.query?.search || [];
           let wikiCount = 0;
           for (const item of items.slice(0, 2)) {
-            console.log(`[Wikipedia Search] Full Query: "${query}" -> Matched Article Title: "${item.title}"`);
             try {
               const sumUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(item.title)}`;
               const sumRes = await fetch(sumUrl);
@@ -106,9 +105,9 @@ async function performMultiSourceSearch(query: string): Promise<string> {
               wikiCount++;
             }
           }
-          console.log(`[Wikipedia Search]  Successfully fetched ${wikiCount} snippet(s)`);
+          console.log(`[Wikipedia Search] Successfully fetched ${wikiCount} snippet(s)`);
         } else {
-          console.log(`[Wikipedia Search]  API request failed with status: ${wikiRes.status}`);
+          console.log(`[Wikipedia Search] API request failed with status: ${wikiRes.status}`);
         }
         console.log(`===========================================================\n`);
       } catch (err: any) {
@@ -116,61 +115,18 @@ async function performMultiSourceSearch(query: string): Promise<string> {
       }
     })()
   );
-
-  // 3. DuckDuckGo Instant Answer API
-  tasks.push(
-    (async () => {
-      try {
-        console.log(`\n================= [DUCKDUCKGO SEARCH] =================`);
-        console.log(`[DuckDuckGo Search] Querying DuckDuckGo Instant API for: "${query}"...`);
-        const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
-        const ddgRes = await fetch(ddgUrl);
-        if (ddgRes.ok) {
-          const ddgData = (await ddgRes.json()) as {
-            AbstractText?: string;
-            RelatedTopics?: Array<{ Text?: string }>;
-          };
-          let ddgCount = 0;
-          if (ddgData.AbstractText) {
-            snippets.push({
-              source: 'DuckDuckGo',
-              title: 'Abstract',
-              snippet: ddgData.AbstractText.slice(0, 150).replace(/\s+/g, ' ').trim(),
-            });
-            ddgCount = 1;
-          } else if (ddgData.RelatedTopics && ddgData.RelatedTopics.length > 0) {
-            for (const topic of ddgData.RelatedTopics.slice(0, 2)) {
-              if (topic.Text) {
-                snippets.push({
-                  source: 'DuckDuckGo',
-                  title: 'Instant Info',
-                  snippet: topic.Text.slice(0, 150).replace(/\s+/g, ' ').trim(),
-                });
-                ddgCount++;
-              }
-            }
-          }
-          console.log(`[DuckDuckGo Search]  Successfully fetched ${ddgCount} snippet(s)`);
-        } else {
-          console.log(`[DuckDuckGo Search]  Request failed with status: ${ddgRes.status}`);
-        }
-        console.log(`===========================================================\n`);
-      } catch (err: any) {
-        console.warn(`[DuckDuckGo Search]  Error: ${err?.message}`);
-      }
-    })()
-  );
+  */
 
   await Promise.allSettled(tasks);
 
-  console.log(`\n================  [CONSOLIDATED SEARCH RESULTS] ================`);
+  console.log(`\n================ [CONSOLIDATED SEARCH RESULTS] ================`);
   console.log(`Total Snippets Gathered: ${snippets.length}`);
   console.log(`Result Array:`, snippets);
   console.log(`===================================================================\n`);
 
   if (snippets.length > 0) {
     return (
-      `Multi-Source Web Search Results for "${query}":\n\n` +
+      `Web Search Results for "${query}":\n\n` +
       snippets.map((s, i) => `${i + 1}. [${s.source}: ${s.title}] ${s.snippet}`).join('\n\n')
     );
   }
@@ -180,7 +136,7 @@ async function performMultiSourceSearch(query: string): Promise<string> {
 
 /**
  * Web search tool for live cricket scores, sports updates, news, and general internet browsing.
- * Combines Tavily API, Wikipedia, and DuckDuckGo in parallel for max coverage and accuracy.
+ * Uses Tavily API for fast and accurate live information.
  */
 export const webSearchTool = tool(
   async (args: Record<string, any>) => {
@@ -188,7 +144,7 @@ export const webSearchTool = tool(
       (args?.query || args?.search || args?.q || args?.topic || Object.values(args || {}).filter((v) => typeof v === 'string').join(' ')).trim();
 
     if (!query) {
-      console.log('[Search Tool]  Empty search query provided.');
+      console.log('[Search Tool] Empty search query provided.');
       return 'No search query provided. Please specify what to search for.';
     }
 

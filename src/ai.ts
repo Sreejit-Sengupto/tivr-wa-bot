@@ -1,27 +1,17 @@
-import { ChatGroq } from '@langchain/groq';
 import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts';
 import { AIMessage, HumanMessage, ToolMessage, SystemMessage, type BaseMessage } from '@langchain/core/messages';
+import { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { config } from './config.js';
 import { type StoredMessage } from './store.js';
 import { aiRateLimiter } from './rateLimiter.js';
-import { botTools } from './tools/index.js';
+import { getBotTools } from './tools/index.js';
+import { formatForWhatsApp } from './formatter.js';
+import { createGeminiModel } from './providers/gemini.js';
+// Note: Groq provider is available in ./providers/groq.js if needed in the future
 
-let modelInstance: ChatGroq | null = null;
-
-function getChatModel(): ChatGroq {
-  if (!modelInstance) {
-    const apiKey = config.groqApiKey || process.env.GROQ_API_KEY;
-    if (!apiKey) {
-      throw new Error('GROQ_API_KEY is not set in environment or .env file');
-    }
-    modelInstance = new ChatGroq({
-      apiKey,
-      model: config.groqModel,
-      temperature: 0.7,
-      maxTokens: 1024,
-    });
-  }
-  return modelInstance;
+function getChatModel(): BaseChatModel {
+  // Directly calling the Gemini provider as requested
+  return createGeminiModel();
 }
 
 /**
@@ -39,7 +29,7 @@ function formatChatHistory(chatHistory: StoredMessage[]): BaseMessage[] {
 /**
  * Synthesizes a clean text response when tool execution completes or produces empty text.
  */
-async function synthesizeFinalResponse(messages: BaseMessage[], chatModel: ChatGroq): Promise<AIMessage> {
+async function synthesizeFinalResponse(messages: BaseMessage[], chatModel: BaseChatModel): Promise<AIMessage> {
   const currentDateStr = new Date().toISOString().split('T')[0];
   const sanitized: BaseMessage[] = [
     new SystemMessage(
@@ -68,7 +58,8 @@ async function synthesizeFinalResponse(messages: BaseMessage[], chatModel: ChatG
       : 'Please provide a direct and concise answer to the user question.';
 
   sanitized.push(new HumanMessage(contextInfo));
-  return chatModel.invoke(sanitized);
+  const res = await chatModel.invoke(sanitized);
+  return res as AIMessage;
 }
 
 export interface GenerateResponseParams {
@@ -78,26 +69,28 @@ export interface GenerateResponseParams {
 }
 
 /**
- * Generates an AI response using LangChain ChatGroq with weather and internet search tools.
+ * Generates an AI response using LangChain with Gemini and tools.
  */
 export async function generateAIResponse({
   promptQuery,
   senderName,
   chatHistory,
 }: GenerateResponseParams): Promise<string> {
-  if (!config.groqApiKey && !process.env.GROQ_API_KEY) {
-    return '⚠️ GROQ_API_KEY is missing. Please set it in your .env file.';
+  if (!config.geminiApiKey && !process.env.GEMINI_API_KEY && !process.env.GOOGLE_API_KEY) {
+    return '⚠️ GEMINI_API_KEY (or GOOGLE_API_KEY) is missing. Please set it in your .env file.';
   }
 
   try {
     await aiRateLimiter.acquire();
 
     const chatModel = getChatModel();
-    const modelWithTools = chatModel.bindTools(botTools);
+    const allTools = getBotTools();
+    const modelWithTools = allTools.length > 0 && (chatModel as any).bindTools ? (chatModel as any).bindTools(allTools) : chatModel;
     const historyMessages = formatChatHistory(chatHistory);
 
+    const activeModelName = config.geminiModel || 'gemini-3.5-flash-lite';
     console.log(
-      `[LangChain AI] Dispatching request with model "${config.groqModel}" and ${botTools.length} tools...`
+      `[LangChain AI] Dispatching request with GEMINI ("${activeModelName}") [Active Tools: ${allTools.length}]...`
     );
 
     const currentDateStr = new Date().toISOString().split('T')[0];
@@ -106,9 +99,9 @@ export async function generateAIResponse({
     const promptTemplate = ChatPromptTemplate.fromMessages([
       [
         'system',
-        `You are tivr, a smart, helpful, and concise AI assistant inside a WhatsApp group chat.
+        `You are hgbot, a smart, helpful, and concise AI assistant inside a WhatsApp group chat.
 Current real-world date: ${currentDateStr} (Year: ${currentYear}).
-When the user asks about recent events, latest scores, recent matches/ducks, or current news, assume the present time is ${currentYear}. Formulate search queries naturally for up-to-date information
+When the user asks about recent events, latest scores, recent matches/ducks, or current news, assume the present time is ${currentYear}. Formulate search queries naturally for up-to-date information.
 You have access to recent group messages for context.
 
 Tools:
@@ -117,8 +110,11 @@ Tools:
 Call available tools automatically whenever live or external real-time data is needed.
 
 Formatting & Style:
-- Be direct, friendly, and concise for mobile chat.
-- WhatsApp formatting allowed: *bold*, _italic_, bullet points.`,
+- You are responding inside WhatsApp. ONLY use WhatsApp-compatible formatting.
+- WhatsApp supports: *bold* (single asterisk), _italic_ (underscore), ~strikethrough~ (tilde), \`\`\`code blocks\`\`\`.
+- NEVER use markdown tables (| col | col |), markdown headers (# or ##), or markdown links ([text](url)).
+- Use bullet points (• or -) and numbered lists for structured data instead of tables.
+- Keep responses concise and mobile-friendly.`,
       ],
       new MessagesPlaceholder('chat_history'),
       ['human', 'From: {senderName}\nQuestion: {promptQuery}'],
@@ -126,7 +122,7 @@ Formatting & Style:
 
     const effectiveQuery =
       promptQuery ||
-      '(The user tagged @tivr with no extra text. Greet the group politely.)';
+      '(The user tagged @hgbot with no extra text. Greet the group politely.)';
 
     const formattedMessages = await promptTemplate.formatMessages({
       chat_history: historyMessages,
@@ -146,7 +142,7 @@ Formatting & Style:
 
       for (const toolCall of response.tool_calls) {
         console.log(`[LangChain AI] Executing tool "${toolCall.name}" with args:`, toolCall.args);
-        const targetTool = botTools.find((t) => t.name === toolCall.name);
+        const targetTool = allTools.find((t) => t.name === toolCall.name);
 
         let toolOutput = '';
         if (targetTool) {
@@ -180,11 +176,11 @@ Formatting & Style:
       reply = typeof finalRes.content === 'string' ? finalRes.content.trim() : '';
     }
 
-    return reply || 'Sorry, I could not generate a response. Please try again.';
+    return formatForWhatsApp(reply) || 'Sorry, I could not generate a response. Please try again.';
   } catch (error: any) {
     console.error('[LangChain AI] Error generating response:', error);
     if (error?.status === 429 || error?.message?.includes('429')) {
-      return '⚠️ Rate limit reached on Groq API. Please wait a moment before trying again.';
+      return '⚠️ Rate limit reached. Please wait a moment before trying again.';
     }
     return `⚠️ Error generating AI response: ${error?.message || 'Unknown error'}`;
   }
