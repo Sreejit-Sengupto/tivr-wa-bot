@@ -85,7 +85,7 @@ export async function connectToWhatsApp(
     } else if (connection === 'open') {
       console.log('[WhatsApp] Connection established successfully! Socket is ready.');
 
-      const targetDate = new Date('2026-09-06T10:53:00+05:30');
+      const targetDate = new Date('2026-09-09T00:00:00+05:30');
       // Guard 1: Only schedule if it's still in the future
       // Guard 2: Only schedule if we haven't already scheduled it on a previous socket reconnect
       if (targetDate.getTime() > Date.now() && !isMessageScheduled) {
@@ -93,16 +93,20 @@ export async function connectToWhatsApp(
 
         schedule.scheduleJob(targetDate, async () => {
           try {
-            await sock.sendMessage(config.targetJIDS[1], {
-              text: config.birthdayWish,
-              mentions: [config.mention]
-            });
-            await sock.sendMessage(config.targetJIDS[1], {
+            await sock.sendMessage(config.targetJIDS[0], {
               audio: {
-                url: './media/HappyBirthdayToYou-[AudioTrimmer.com].ogg'
+                url: './media/kd_birthday_song.ogg'
               },
               mimetype: 'audio/ogg; codecs=opus'
             })
+            await sock.sendMessage(config.targetJIDS[0], {
+              text: config.birthdayWish,
+              mentions: [config.mention]
+            });
+            await sock.sendMessage(config.targetJIDS[0], {
+              text: '🥳🥳🎂🎂🎉',
+              // mentions: [config.mention]
+            });
             console.log('[WhatsApp] ✅ Sent birthday message via node-schedule!');
           } catch (err) {
             console.error('[WhatsApp] ❌ Send error:', err);
